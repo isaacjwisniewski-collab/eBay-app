@@ -1,2 +1,2 @@
 # eBay-app
-Trial app for rbay
+Trial app for ebay
