@@ -13,15 +13,17 @@ Deno.serve(async (req: Request) => {
     let created = 0;
     let updated = 0;
     const parseItems = (xmlText: string, section: string, status: string) => {
-      const regex = new RegExp(`<Item>([\\s\\S]*?)<\\/Item>`, "g");
       const sectionMatch = xmlText.match(new RegExp(`<${section}>[\\s\\S]*?<\\/${section}>`));
       if (!sectionMatch) return [];
       const items: any[] = [];
+      const itemRegex = /<Item>([\s\S]*?)<\/Item>/g;
       let match;
-      while ((match = regex.exec(sectionMatch[0])) !== null) {
+      while ((match = itemRegex.exec(sectionMatch[0])) !== null) {
         const xml = match[1];
-        const get = (tag: string) => { const m = xml.match(new RegExp(`<${tag}>([^<]*)<\\/${tag}>`)); return m ? m[1] : null; };
-        items.push({ itemId: get("ItemID"), title: get("Title"), currentPrice: get("CurrentPrice"), bidCount: get("BidCount"), watchCount: get("WatchCount"), viewCount: get("ViewItemsCount"), listingType: get("ListingType"), endTime: get("EndTime"), startTime: get("StartTime"), url: get("ViewItemURL"), imageUrl: get("GalleryURL"), quantity: get("Quantity"), quantitySold: get("QuantitySold"), status });
+        const get = (tag: string) => { const m = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)<\\/${tag}>`)); return m ? m[1] : null; };
+        const getAttr = (tag: string) => { const m = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)<\\/${tag}>`)); return m ? m[1].trim() : null; };
+        const price = getAttr("CurrentPrice") || getAttr("ConvertedCurrentPrice") || getAttr("BuyItNowPrice") || getAttr("StartPrice") || get("CurrentPrice") || "0";
+        items.push({ itemId: get("ItemID"), title: get("Title"), currentPrice: price, bidCount: get("BidCount"), watchCount: get("WatchCount"), viewCount: get("ViewItemsCount") || get("HitCount"), listingType: get("ListingType"), endTime: get("EndTime"), startTime: get("StartTime"), url: get("ViewItemURL"), imageUrl: get("GalleryURL") || get("PictureURL"), quantity: get("Quantity"), quantitySold: get("QuantitySold"), conditionName: get("ConditionDisplayName") || get("ConditionName"), status });
       }
       return items;
     };
@@ -43,11 +45,8 @@ Deno.serve(async (req: Request) => {
     let allItems = [...parseItems(firstPage, "ActiveList", "active"), ...parseItems(firstPage, "SoldList", "sold"), ...parseItems(firstPage, "UnsoldList", "unsold")];
     const maxPages = Math.max(activeTotalPages, soldTotalPages, unsoldTotalPages);
     for (let page = 2; page <= maxPages; page++) {
-      const ap = page <= activeTotalPages ? page : activeTotalPages;
-      const sp = page <= soldTotalPages ? page : soldTotalPages;
-      const up = page <= unsoldTotalPages ? page : unsoldTotalPages;
       if (page > activeTotalPages && page > soldTotalPages && page > unsoldTotalPages) break;
-      const xml = await fetchPage(ap, sp, up);
+      const xml = await fetchPage(page <= activeTotalPages ? page : activeTotalPages, page <= soldTotalPages ? page : soldTotalPages, page <= unsoldTotalPages ? page : unsoldTotalPages);
       if (page <= activeTotalPages) allItems.push(...parseItems(xml, "ActiveList", "active"));
       if (page <= soldTotalPages) allItems.push(...parseItems(xml, "SoldList", "sold"));
       if (page <= unsoldTotalPages) allItems.push(...parseItems(xml, "UnsoldList", "unsold"));
@@ -55,12 +54,13 @@ Deno.serve(async (req: Request) => {
     for (const item of allItems) {
       if (!item.itemId) continue;
       const title = item.title || "Unknown";
-      const listingData = { account_id: account.id, user_id: account.user_id, ebay_item_id: item.itemId, ebay_listing_url: item.url || null, title: title, brand: extractBrand(title), shoe_size: extractSize(title), current_price: item.currentPrice ? parseFloat(item.currentPrice) : 0, currency: "USD", listing_type: item.listingType || "FixedPrice", bid_count: item.bidCount ? parseInt(item.bidCount) : 0, watch_count: item.watchCount ? parseInt(item.watchCount) : 0, view_count: item.viewCount ? parseInt(item.viewCount) : 0, status: item.status, listed_at: item.startTime || null, ends_at: item.endTime || null, primary_image_url: item.imageUrl || null, raw_ebay_data: item };
+      const price = parseFloat(item.currentPrice) || 0;
+      const listingData = { account_id: account.id, user_id: account.user_id, ebay_item_id: item.itemId, ebay_listing_url: item.url || null, title: title, brand: extractBrand(title), shoe_size: extractSize(title), condition: item.conditionName || null, current_price: price, currency: "USD", listing_type: item.listingType || "FixedPrice", bid_count: item.bidCount ? parseInt(item.bidCount) : 0, watch_count: item.watchCount ? parseInt(item.watchCount) : 0, view_count: item.viewCount ? parseInt(item.viewCount) : 0, status: item.status, listed_at: item.startTime || null, ends_at: item.endTime || null, primary_image_url: item.imageUrl || null, raw_ebay_data: item };
       const { data: existing } = await supabase.from("listings").select("id").eq("ebay_item_id", item.itemId).eq("account_id", account.id).maybeSingle();
       if (existing) { await supabase.from("listings").update(listingData).eq("id", existing.id); updated++; } else { await supabase.from("listings").insert(listingData); created++; }
     }
     await supabase.from("ebay_accounts").update({ sync_status: "synced", last_synced_at: new Date().toISOString(), sync_error: null }).eq("id", account_id);
-    return new Response(JSON.stringify({ success: true, total: allItems.length, pages: { active: activeTotalPages, sold: soldTotalPages, unsold: unsoldTotalPages }, created, updated }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, total: allItems.length, samplePrice: allItems[0]?.currentPrice, pages: { active: activeTotalPages, sold: soldTotalPages, unsold: unsoldTotalPages }, created, updated }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
   }
