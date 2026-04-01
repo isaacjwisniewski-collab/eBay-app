@@ -19,7 +19,7 @@ Deno.serve(async (req: Request) => {
   const ebayUserId = userData.username || userData.userId || "unknown";
   const supabase = getSupabaseAdmin();
   const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString();
-  const { error } = await supabase.from("ebay_accounts").upsert({ user_id: userId, ebay_user_id: ebayUserId, account_label: accountLabel, access_token: tokenData.access_token, refresh_token: tokenData.refresh_token, token_expires_at: expiresAt, token_scope: tokenData.scope, ebay_app_id: appId, ebay_cert_id: certId, ebay_dev_id: Deno.env.get("EBAY_DEV_ID"), sync_status: "never" }, { onConflict: "user_id,ebay_user_id" });
+  const { error } = await supabase.from("ebay_accounts").upsert({ user_id: userId, ebay_user_id: ebayUserId, account_label: accountLabel, access_token: tokenData.access_token, refresh_token: tokenData.refresh_token, token_expires_at: expiresAt, token_scope: tokenData.scope, ebay_app_id: appId, ebay_cert_id: certId, ebay_dev_id: Deno.env.get("EBAY_DEV_ID"), environment: "PRODUCTION", sync_status: "never" }, { onConflict: "user_id,ebay_user_id" });
   if (error) return new Response(`Database error: ${error.message}`, { status: 500 });
   const appUrl = Deno.env.get("APP_URL") || "http://localhost:5173";
   return Response.redirect(`${appUrl}/settings?connected=true`, 302);

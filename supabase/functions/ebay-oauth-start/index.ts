@@ -7,7 +7,7 @@ Deno.serve(async (req: Request) => {
   const appId = Deno.env.get("EBAY_APP_ID")!;
   const redirectUri = Deno.env.get("EBAY_REDIRECT_URI")!;
   const authBase = getAuthBase("PRODUCTION");
-  const scopes = ["https://api.ebay.com/oauth/api_scope", "https://api.ebay.com/oauth/api_scope/sell.inventory", "https://api.ebay.com/oauth/api_scope/sell.account", "https://api.ebay.com/oauth/api_scope/sell.fulfillment", "https://api.ebay.com/oauth/api_scope/commerce.identity.readonly", "https://api.ebay.com/oauth/api_scope/sell.item"].join(" ");
+  const scopes = "https://api.ebay.com/oauth/api_scope";
   const state = btoa(JSON.stringify({ userId, accountLabel }));
   const authUrl = `${authBase}/oauth2/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}`;
   return Response.redirect(authUrl, 302);
