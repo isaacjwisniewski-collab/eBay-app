@@ -3,3 +3,15 @@ verify_jwt = false
 
 [functions.ebay-oauth-callback]
 verify_jwt = false
+
+[functions.sync-listings]
+verify_jwt = false
+
+[functions.sync-messages]
+verify_jwt = false
+
+[functions.price-compare]
+verify_jwt = false
+
+[functions.cron-sync]
+verify_jwt = false
